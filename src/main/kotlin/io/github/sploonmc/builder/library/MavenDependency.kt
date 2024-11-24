@@ -31,7 +31,7 @@ data class MavenDependency(val groupId: String, val artifactId: String, val vers
     companion object {
         private fun download(dependency: MavenDependency, override: Boolean): List<Path> {
             val output =
-                SploonBuilder.workDirectory.resolve(dependency.groupId.replace(".", "/")).resolve(dependency.artifactId)
+                SploonBuilder.librariesDir.resolve(dependency.groupId.replace(".", "/")).resolve(dependency.artifactId)
                     .resolve(dependency.version).resolve("${dependency.artifactId}-${dependency.version}.jar")
 
             if (output.exists() && !override) return listOf(output)
@@ -90,7 +90,6 @@ data class MavenDependency(val groupId: String, val artifactId: String, val vers
 
             val parser = XmlParser()
             val url = URI(repository.url + gavWithPom).toURL()
-//            println(url)
             val pom = url.openStream().reader().use { reader ->
                 parser.fromXml(reader.readText())
             }
@@ -116,6 +115,13 @@ data class MavenDependency(val groupId: String, val artifactId: String, val vers
 
             return dependencies
         }
+    }
+
+    override fun hashCode(): Int {
+        var result = groupId.hashCode()
+        result = 31 * result + artifactId.hashCode()
+        result = 31 * result + version.hashCode()
+        return result
     }
 }
 

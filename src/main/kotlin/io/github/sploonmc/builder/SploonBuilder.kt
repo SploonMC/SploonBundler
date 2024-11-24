@@ -1,64 +1,117 @@
 package io.github.sploonmc.builder
 
 import io.github.sploonmc.builder.library.MavenDependency
+import io.github.sploonmc.builder.piston.PistonAPI
+import io.github.sploonmc.builder.piston.PistonAPI.getVersionMeta
+import io.github.sploonmc.builder.piston.PistonLibrary
 import io.sigpipe.jbsdiff.Patch
-import mjson.Json
-import org.apache.commons.compress.archivers.zip.ZipFile
 import java.lang.invoke.MethodHandles
 import java.lang.invoke.MethodType
 import java.net.URI
 import java.net.URLClassLoader
+import java.nio.file.FileVisitResult
 import java.nio.file.Path
-import kotlin.io.path.Path
+import java.nio.file.SimpleFileVisitor
+import java.nio.file.attribute.BasicFileAttributes
+import java.util.jar.JarFile
+import kotlin.io.path.ExperimentalPathApi
+import kotlin.io.path.createDirectories
 import kotlin.io.path.createDirectory
-import kotlin.io.path.createFile
-import kotlin.io.path.inputStream
+import kotlin.io.path.exists
 import kotlin.io.path.notExists
 import kotlin.io.path.outputStream
 import kotlin.io.path.readBytes
+import kotlin.io.path.visitFileTree
 
-// TODO move to constants
-private const val SPLOON_PATCHES_URL = "https://raw.githubusercontent.com/SploonMC/patches/master/<version>.libs"
+private const val SPLOON_PATCHES_REPO_BASE_URL = "https://raw.githubusercontent.com/SploonMC/patches/refs/heads/master"
 
-class SploonBuilder(val minecraftVersion: String, workDir: Path) {
+class SploonBuilder(val minecraftVersion: String, workDir: Path, val serverArgs: Array<String>) {
+    private val pistonVersions = PistonAPI.getPistonVersions()
+    private val versionMeta = pistonVersions.getVersionMeta(minecraftVersion)
+    val bundlerDir = workDir.resolve("bundler")
+    val vanillaServer = bundlerDir.resolve("mojang-server-$minecraftVersion.jar")
+    val vanillaBundler = bundlerDir.resolve("mojang-bundler-$minecraftVersion.jar")
+    val outputServer = bundlerDir.resolve("spigot-$minecraftVersion.jar")
+    val patch = bundlerDir.resolve("$minecraftVersion.patch")
 
     init {
-        workDirectory = workDir
+        librariesDir = workDir.resolve("libraries")
         setup()
     }
 
     private fun setup() {
-        if (workDirectory.notExists()) workDirectory.createDirectory()
+        if (librariesDir.notExists()) librariesDir.createDirectories()
+
+        download()
     }
 
-    fun start() {
-        val testFile = Path("C:\\Users\\immrt\\Downloads\\1.21.3.libs")
-        val url = URI(SPLOON_PATCHES_URL.replace("<version>", minecraftVersion))
-//      url.toURL().openStream().reader().readLines()
-        val deps = testFile.inputStream().reader().use { reader ->
-            MavenDependency.parseLines(reader.readLines())
-        }.toMutableList()
+    private fun download() {
+        if (patch.notExists()) {
+            println("Downloading patch...")
+            downloadUri(URI("$SPLOON_PATCHES_REPO_BASE_URL/$minecraftVersion.patch"), patch)
+            println("Patch downloaded!")
+        }
+    }
 
+    fun verifyHashes(): Boolean {
+        val patchedMeta = getUriJson<PatchedVersionMeta>(URI("$SPLOON_PATCHES_REPO_BASE_URL/$minecraftVersion.json"))
+        val vanillaHash = vanillaServer.sha1()
+        val patchedHash = outputServer.sha1()
+        val patchHash = patch.sha1()
+        val ok = vanillaHash == patchedMeta.vanillaJarHash
+                && patchedHash == patchedMeta.patchedJarHash
+                && patchHash == patchedMeta.patchHash
 
+        if (!ok) {
+            println("Failed verifying hashes:")
 
-        val spigotJarPath = setupVanilla()
+            println("Vanilla:")
+            println("Found: $vanillaHash")
+            println("Expected: ${patchedMeta.vanillaJarHash}")
 
-        val classPath = deps.flatMap {
-            it.download(false)
-        }.map { it.toUri().toURL() }.toMutableList()
+            println("Patched:")
+            println("Found: $patchedHash")
+            println("Expected: ${patchedMeta.patchedJarHash}")
 
-        // Handle mojang deps to cover everything
-        // TODO remove hard code
-        val json = Json.read(URI("https://piston-meta.mojang.com/v1/packages/fec76f40dbeb023db42fdf80d85624fc1f326d06/1.21.3.json").toURL())
-        for (library in json.at("libraries").asJsonList()) {
-            val gav = library.at("name").asString()
-            classPath.addAll(MavenDependency.parseLine(gav).download(false).map {it.toUri().toURL()})
+            println("Patch:")
+            println("Found: $patchHash")
+            println("Expected: ${patchedMeta.patchHash}")
         }
 
-        classPath.add(spigotJarPath.toUri().toURL())
+        return ok
+    }
+
+    @OptIn(ExperimentalPathApi::class)
+    fun start() {
+        val libs = getUri(URI("$SPLOON_PATCHES_REPO_BASE_URL/$minecraftVersion.libs"))
+        val deps = MavenDependency.parseLines(libs.lines())
+        val spigotJarPath = setupVanilla()
+        deps.forEach { dep ->
+            dep.download(false)
+        }
+
+        // Handle mojang deps to cover everything
+        versionMeta.libraries.map(PistonLibrary::name).forEach { lib ->
+            MavenDependency
+                .parseLine(lib)
+                .download(false)
+                .map(Path::toUri)
+                .map(URI::toURL)
+        }
+
+        val classpath = buildList {
+            librariesDir.visitFileTree(object : SimpleFileVisitor<Path>() {
+                override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                    add(file.toUri().toURL())
+                    return FileVisitResult.CONTINUE
+                }
+            })
+
+            add(spigotJarPath.toUri().toURL())
+        }
 
         val parentClassLoader = object {}.javaClass.classLoader.parent
-        val classLoader = URLClassLoader(classPath.toTypedArray(), parentClassLoader)
+        val classLoader = URLClassLoader(classpath.distinct().toTypedArray(), parentClassLoader)
 
         val serverThread = Thread({
             val mainClass = Class.forName("org.bukkit.craftbukkit.Main", true, classLoader)
@@ -66,54 +119,49 @@ class SploonBuilder(val minecraftVersion: String, workDir: Path) {
                 .findStatic(mainClass, "main", MethodType.methodType(Void.TYPE, Array<String>::class.java))
                 .asFixedArity()
 
-            mainHandle.invoke(arrayOf<String>(""))
+            mainHandle.invoke(serverArgs)
         }, "ServerMain")
 
         serverThread.contextClassLoader = classLoader
         serverThread.start()
     }
 
-//    <X extends Throwable> RuntimeException sneakyThrow(final Throwable ex) throws X {
-//        throw (X) ex;
-//    }
-
     fun setupVanilla(): Path {
-        val vanillaServerDir = workDirectory.resolve("bundler")
-        if (vanillaServerDir.notExists()) vanillaServerDir.createDirectory()
+        if (bundlerDir.notExists()) bundlerDir.createDirectory()
 
-        val vanillaBundler = vanillaServerDir.resolve("mojang-bundler-$minecraftVersion.jar")
         if (vanillaBundler.notExists()) {
-            // TODO non hardcoded
-            vanillaBundler.createFile()
-            vanillaBundler.outputStream().use { output ->
-                URI("https://piston-data.mojang.com/v1/objects/45810d238246d90e811d896f87b14695b7fb6839/server.jar").toURL()
-                    .openStream().transferTo(output)
-            }
+            println("Downloading vanilla...")
+            downloadUri(URI(versionMeta.downloads.server.url), vanillaBundler)
+            println("Vanilla downloaded!")
         }
-        val vanillaServer = vanillaServerDir.resolve("mojang-server-$minecraftVersion.jar")
+
         if (vanillaServer.notExists()) {
-            val zip = ZipFile(vanillaBundler.toFile())
+            val zip = JarFile(vanillaBundler.toFile())
             val entry = zip.getEntry("META-INF/versions/$minecraftVersion/server-$minecraftVersion.jar")
             zip.getInputStream(entry).use { input ->
                 vanillaServer.outputStream().use { output ->
                     input.transferTo(output)
                 }
             }
+
+            zip.close()
         }
 
-        val outputServer = vanillaServerDir.resolve("spigot-$minecraftVersion.jar")
-        // TODO check hash from sploon or smth
-//        if (outputServer.exists()) return outputServer
-        // TODO input of path not hard code
-        val patch = Path("C:\\Users\\immrt\\Downloads\\1.21.3.patch")
+        if (outputServer.exists()) return outputServer
+
+        println("Patching...")
         Patch.patch(vanillaServer.readBytes(), patch.readBytes(), outputServer.outputStream())
+        println("Patched!")
+
+        if (!verifyHashes()) {
+            error("failed verifying hashes")
+        }
 
         return outputServer
     }
 
-
     companion object {
-        internal lateinit var workDirectory: Path
+        internal lateinit var librariesDir: Path
             private set
     }
 }
