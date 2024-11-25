@@ -27,7 +27,6 @@ data class PistonVersionDownload(
 @Serializable
 data class PistonVersionDownloads(
     val server: PistonVersionDownload,
-    @SerialName("server_mappings") val serverMappings: PistonVersionDownload
 )
 
 @Serializable
