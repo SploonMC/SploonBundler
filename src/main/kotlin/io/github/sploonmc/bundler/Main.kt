@@ -12,5 +12,5 @@ fun main(args: Array<String>) {
     val serverArgs = args.drop(1).toMutableList()
     if ("nogui" !in args) serverArgs.addFirst("nogui")
 
-    SploonBuilder(args[0], Path(""), serverArgs.toTypedArray()).start()
+    SploonBundler(args[0], Path(""), serverArgs.toTypedArray()).start()
 }

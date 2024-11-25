@@ -18,6 +18,7 @@ import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.createDirectories
 import kotlin.io.path.createDirectory
 import kotlin.io.path.exists
+import kotlin.io.path.extension
 import kotlin.io.path.notExists
 import kotlin.io.path.outputStream
 import kotlin.io.path.readBytes
@@ -25,10 +26,12 @@ import kotlin.io.path.visitFileTree
 
 private const val SPLOON_PATCHES_REPO_BASE_URL = "https://raw.githubusercontent.com/SploonMC/patches/refs/heads/master"
 
-class SploonBuilder(val minecraftVersion: String, workDir: Path, val serverArgs: Array<String>) {
+class SploonBundler(val minecraftVersion: String, workDir: Path, val serverArgs: Array<String>) {
     private val pistonVersions = PistonAPI.getPistonVersions()
     private val versionMeta = pistonVersions.getVersionMeta(minecraftVersion)
+
     val bundlerDir = workDir.resolve("bundler")
+
     val vanillaServer = bundlerDir.resolve("mojang-server-$minecraftVersion.jar")
     val vanillaBundler = bundlerDir.resolve("mojang-bundler-$minecraftVersion.jar")
     val outputServer = bundlerDir.resolve("spigot-$minecraftVersion.jar")
@@ -102,7 +105,7 @@ class SploonBuilder(val minecraftVersion: String, workDir: Path, val serverArgs:
         val classpath = buildList {
             librariesDir.visitFileTree(object : SimpleFileVisitor<Path>() {
                 override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
-                    add(file.toUri().toURL())
+                    if (file.extension == "jar") add(file.toUri().toURL())
                     return FileVisitResult.CONTINUE
                 }
             })
@@ -120,7 +123,7 @@ class SploonBuilder(val minecraftVersion: String, workDir: Path, val serverArgs:
                 .asFixedArity()
 
             mainHandle.invoke(serverArgs)
-        }, "ServerMain")
+        }, "Server thread")
 
         serverThread.contextClassLoader = classLoader
         serverThread.start()

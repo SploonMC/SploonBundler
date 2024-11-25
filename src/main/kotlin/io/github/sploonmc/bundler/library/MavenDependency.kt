@@ -1,6 +1,6 @@
 package io.github.sploonmc.bundler.library
 
-import io.github.sploonmc.bundler.SploonBuilder
+import io.github.sploonmc.bundler.SploonBundler
 import xmlparser.XmlParser
 import java.net.URI
 import java.nio.file.Path
@@ -31,7 +31,7 @@ data class MavenDependency(val groupId: String, val artifactId: String, val vers
     companion object {
         private fun download(dependency: MavenDependency, override: Boolean): List<Path> {
             val output =
-                SploonBuilder.librariesDir.resolve(dependency.groupId.replace(".", "/")).resolve(dependency.artifactId)
+                SploonBundler.librariesDir.resolve(dependency.groupId.replace(".", "/")).resolve(dependency.artifactId)
                     .resolve(dependency.version).resolve("${dependency.artifactId}-${dependency.version}.jar")
 
             if (output.exists() && !override) return listOf(output)
