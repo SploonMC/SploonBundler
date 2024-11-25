@@ -1,4 +1,4 @@
-package io.github.sploonmc.builder
+package io.github.sploonmc.bundler
 
 import kotlinx.serialization.json.Json
 import java.net.URI

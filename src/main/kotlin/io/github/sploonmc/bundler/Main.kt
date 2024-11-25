@@ -1,4 +1,4 @@
-package io.github.sploonmc.builder
+package io.github.sploonmc.bundler
 
 import kotlin.io.path.Path
 import kotlin.system.exitProcess

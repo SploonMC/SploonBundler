@@ -1,4 +1,4 @@
-package io.github.sploonmc.builder.piston
+package io.github.sploonmc.bundler.piston
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

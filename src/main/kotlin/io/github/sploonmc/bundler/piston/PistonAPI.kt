@@ -1,6 +1,6 @@
-package io.github.sploonmc.builder.piston
+package io.github.sploonmc.bundler.piston
 
-import io.github.sploonmc.builder.getUriJson
+import io.github.sploonmc.bundler.getUriJson
 import java.net.URI
 
 object PistonAPI {

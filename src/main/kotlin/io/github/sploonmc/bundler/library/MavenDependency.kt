@@ -1,6 +1,6 @@
-package io.github.sploonmc.builder.library
+package io.github.sploonmc.bundler.library
 
-import io.github.sploonmc.builder.SploonBuilder
+import io.github.sploonmc.bundler.SploonBuilder
 import xmlparser.XmlParser
 import java.net.URI
 import java.nio.file.Path

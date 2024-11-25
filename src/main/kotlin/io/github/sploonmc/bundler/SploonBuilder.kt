@@ -1,9 +1,9 @@
-package io.github.sploonmc.builder
+package io.github.sploonmc.bundler
 
-import io.github.sploonmc.builder.library.MavenDependency
-import io.github.sploonmc.builder.piston.PistonAPI
-import io.github.sploonmc.builder.piston.PistonAPI.getVersionMeta
-import io.github.sploonmc.builder.piston.PistonLibrary
+import io.github.sploonmc.bundler.library.MavenDependency
+import io.github.sploonmc.bundler.piston.PistonAPI
+import io.github.sploonmc.bundler.piston.PistonAPI.getVersionMeta
+import io.github.sploonmc.bundler.piston.PistonLibrary
 import io.sigpipe.jbsdiff.Patch
 import java.lang.invoke.MethodHandles
 import java.lang.invoke.MethodType
