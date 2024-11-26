@@ -1,11 +1,13 @@
 package io.github.sploonmc.bundler
 
-import io.github.sploonmc.bundler.asm.DedicatedServerTransformer
+import io.github.sploonmc.bundler.asm.transform
+import io.github.sploonmc.bundler.asm.transformations.DedicatedServerTransformer
 import io.github.sploonmc.bundler.library.MavenDependency
 import io.github.sploonmc.bundler.piston.PistonAPI
 import io.github.sploonmc.bundler.piston.PistonAPI.getVersionMeta
 import io.github.sploonmc.bundler.piston.PistonLibrary
 import io.sigpipe.jbsdiff.Patch
+import org.objectweb.asm.ClassVisitor
 import java.lang.invoke.MethodHandles
 import java.lang.invoke.MethodType
 import java.net.URI
@@ -87,9 +89,7 @@ class SploonBundler(val minecraftVersion: String, workDir: Path, val serverArgs:
     }
 
     fun applyTransformers() {
-        TRANSFORMERS.forEach { transformer ->
-            transformer.transform(outputServer, transformedOutputServer)
-        }
+        transform(outputServer, transformedOutputServer, TRANSFORMERS)
     }
 
     @OptIn(ExperimentalPathApi::class)
@@ -180,6 +180,8 @@ class SploonBundler(val minecraftVersion: String, workDir: Path, val serverArgs:
         internal lateinit var librariesDir: Path
             private set
 
-        val TRANSFORMERS = listOf(DedicatedServerTransformer)
+        val TRANSFORMERS = mapOf<String, (ClassVisitor) -> ClassVisitor>(
+            DedicatedServerTransformer.TARGET to { visitor -> DedicatedServerTransformer(visitor) }
+        )
     }
 }
