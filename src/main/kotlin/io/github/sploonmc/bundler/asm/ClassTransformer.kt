@@ -37,10 +37,10 @@ abstract class ClassTransformer(val classVisitor: (ClassVisitor) -> ClassVisitor
 
                     val classBytes = zipIn.readBytes()
                     val classReader = ClassReader(classBytes)
-                    val classWriter = ClassWriter(ClassWriter.COMPUTE_FRAMES)
+                    val classWriter = ClassWriter(ClassWriter.COMPUTE_MAXS or ClassWriter.COMPUTE_FRAMES)
                     val cv = classVisitor(classWriter)
 
-                    classReader.accept(cv, ClassReader.EXPAND_FRAMES)
+                    classReader.accept(cv, ClassWriter.COMPUTE_MAXS or ClassWriter.COMPUTE_FRAMES)
 
                     zipOut.write(classWriter.toByteArray())
 
