@@ -39,7 +39,7 @@ class SploonBundler(val minecraftVersion: String, workDir: Path, val serverArgs:
     val vanillaBundler = bundlerDir.resolve("mojang-bundler-$minecraftVersion.jar")
     val outputServer = bundlerDir.resolve("spigot-$minecraftVersion.jar")
     val patch = bundlerDir.resolve("$minecraftVersion.patch")
-    val transformedOutputServer = workDir.resolve("spigot-$minecraftVersion-transformed.jar")
+    val transformedOutputServer = bundlerDir.resolve("spigot-$minecraftVersion-transformed.jar")
 
     init {
         librariesDir = workDir.resolve("libraries")
