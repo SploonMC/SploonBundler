@@ -11,7 +11,10 @@ dependencies {
     implementation("com.github.codemonstur:simplexml:3.2.0")
     implementation("io.sigpipe:jbsdiff:1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
-    implementation("org.apache.logging.log4j:log4j-core:2.24.2")
+    implementation("org.ow2.asm:asm:9.7.1")
+    implementation("org.ow2.asm:asm-tree:9.7.1")
+    implementation("org.ow2.asm:asm-util:9.7.1")
+    implementation("org.ow2.asm:asm-commons:9.7.1")
 }
 
 tasks.shadowJar {

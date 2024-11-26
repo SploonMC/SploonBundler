@@ -1,5 +1,6 @@
 package io.github.sploonmc.bundler
 
+import io.github.sploonmc.bundler.asm.DedicatedServerTransformer
 import io.github.sploonmc.bundler.library.MavenDependency
 import io.github.sploonmc.bundler.piston.PistonAPI
 import io.github.sploonmc.bundler.piston.PistonAPI.getVersionMeta
@@ -36,6 +37,7 @@ class SploonBundler(val minecraftVersion: String, workDir: Path, val serverArgs:
     val vanillaBundler = bundlerDir.resolve("mojang-bundler-$minecraftVersion.jar")
     val outputServer = bundlerDir.resolve("spigot-$minecraftVersion.jar")
     val patch = bundlerDir.resolve("$minecraftVersion.patch")
+    val transformedOutputServer = workDir.resolve("spigot-$minecraftVersion-transformed.jar")
 
     init {
         librariesDir = workDir.resolve("libraries")
@@ -82,6 +84,12 @@ class SploonBundler(val minecraftVersion: String, workDir: Path, val serverArgs:
         }
 
         return ok
+    }
+
+    fun applyTransformers() {
+        TRANSFORMERS.forEach { transformer ->
+            transformer.transform(outputServer, transformedOutputServer)
+        }
     }
 
     @OptIn(ExperimentalPathApi::class)
@@ -139,18 +147,21 @@ class SploonBundler(val minecraftVersion: String, workDir: Path, val serverArgs:
         }
 
         if (vanillaServer.notExists()) {
-            val zip = JarFile(vanillaBundler.toFile())
-            val entry = zip.getEntry("META-INF/versions/$minecraftVersion/server-$minecraftVersion.jar")
-            zip.getInputStream(entry).use { input ->
-                vanillaServer.outputStream().use { output ->
-                    input.transferTo(output)
+            JarFile(vanillaBundler.toFile()).use { zip ->
+                val entry = zip.getEntry("META-INF/versions/$minecraftVersion/server-$minecraftVersion.jar")
+                zip.getInputStream(entry).use { input ->
+                    vanillaServer.outputStream().use { output ->
+                        input.transferTo(output)
+                    }
                 }
             }
-
-            zip.close()
         }
 
-        if (outputServer.exists()) return outputServer
+        if (outputServer.exists() && transformedOutputServer.exists()) return transformedOutputServer
+        if (outputServer.exists() && transformedOutputServer.notExists()) {
+            applyTransformers()
+            return transformedOutputServer
+        }
 
         println("Patching...")
         Patch.patch(vanillaServer.readBytes(), patch.readBytes(), outputServer.outputStream())
@@ -160,11 +171,15 @@ class SploonBundler(val minecraftVersion: String, workDir: Path, val serverArgs:
             error("failed verifying hashes")
         }
 
-        return outputServer
+        applyTransformers()
+
+        return transformedOutputServer
     }
 
     companion object {
         internal lateinit var librariesDir: Path
             private set
+
+        val TRANSFORMERS = listOf(DedicatedServerTransformer)
     }
 }
