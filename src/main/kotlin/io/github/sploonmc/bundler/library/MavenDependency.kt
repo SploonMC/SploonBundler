@@ -27,6 +27,16 @@ data class MavenDependency(val groupId: String, val artifactId: String, val vers
         return true
     }
 
+    fun rewrite(): MavenDependency {
+        var result = this
+
+        LibraryRewriters.REWRITERS.forEach { rewriter ->
+            if (!rewriter.isApplicable(result)) return@forEach
+            result = rewriter.rewrite(result)
+        }
+
+        return result
+    }
 
     companion object {
         private fun download(dependency: MavenDependency, override: Boolean): List<Path> {
@@ -39,14 +49,24 @@ data class MavenDependency(val groupId: String, val artifactId: String, val vers
             val gav =
                 "${dependency.groupId.replace(".", "/")}/${dependency.artifactId}/${dependency.version}/"
 
-            val repository = Repository.parseRepository(dependency.groupId)
+            val repository = Repository.parseRepository(dependency)
 
             var version = dependency.version
             if (dependency.version.contains("SNAPSHOT"))
                 version = latestSnapshotVersion(repository.url + gav + "maven-metadata.xml")
 
             val suffix = gav + "${dependency.artifactId}-$version.jar"
-            val url = URI(repository.url + suffix)
+            var url = URI(repository.url + suffix)
+
+            val isBungeeChatNonSnapshot = dependency.artifactId == "bungeecord-chat" && !dependency.version.endsWith("-SNAPSHOT")
+
+            if (isBungeeChatNonSnapshot) {
+                val metaUrl =
+                    repository.url + "${dependency.groupId.replace(".", "/")}/${dependency.artifactId}/${dependency.version}-SNAPSHOT/maven-metadata.xml"
+
+                val latestSnapshot = latestSnapshotVersion(metaUrl)
+                url = URI(repository.url + "${dependency.groupId.replace(".", "/")}/${dependency.artifactId}/$version-SNAPSHOT/${dependency.artifactId}-$latestSnapshot.jar")
+            }
 
             val outputList = mutableListOf<Path>()
             outputList.addAll(locateTransitiveDeps(dependency, repository, version).flatMap { it.download(false) }.toMutableList())
@@ -86,7 +106,15 @@ data class MavenDependency(val groupId: String, val artifactId: String, val vers
         }
 
         private fun locateTransitiveDeps(parent: MavenDependency, repository: Repository, version: String): List<MavenDependency> {
-            val gavWithPom = "${parent.groupId.replace(".", "/")}/${parent.artifactId}/${parent.version}/${parent.artifactId}-$version.pom"
+            val isBungeeChatNonSnapshot = parent.artifactId == "bungeecord-chat" && !parent.version.endsWith("-SNAPSHOT")
+            var gavWithPom = "${parent.groupId.replace(".", "/")}/${parent.artifactId}/${parent.version}/${parent.artifactId}-$version.pom"
+
+            if (isBungeeChatNonSnapshot) {
+                val metaUrl =
+                    repository.url + "${parent.groupId.replace(".", "/")}/${parent.artifactId}/${parent.version}-SNAPSHOT/maven-metadata.xml"
+                val latestSnapshot = latestSnapshotVersion(metaUrl)
+                gavWithPom = "${parent.groupId.replace(".", "/")}/${parent.artifactId}/$version-SNAPSHOT/${parent.artifactId}-$latestSnapshot.pom"
+            }
 
             val parser = XmlParser()
             val url = URI(repository.url + gavWithPom).toURL()
@@ -127,13 +155,22 @@ data class MavenDependency(val groupId: String, val artifactId: String, val vers
 
 private enum class Repository(val url: String) {
     MOJANG("https://libraries.minecraft.net/"),
-    SPIGOT("https://hub.spigotmc.org/nexus/repository/snapshots/"),
-    CENTRAL("https://repo1.maven.org/maven2/");
+    SPIGOT_SNAPSHOTS("https://hub.spigotmc.org/nexus/repository/snapshots/"),
+    SPIGOT("https://hub.spigotmc.org/nexus/repository/public/"),
+    CENTRAL("https://repo1.maven.org/maven2/"),
+    VELOCITY("https://nexus.velocitypowered.com/repository/maven-public/");
 
     companion object {
-        fun parseRepository(group: String): Repository {
-            if (group.endsWith("mojang")) return MOJANG
-            if (group.endsWith("spigotmc")) return SPIGOT
+        fun parseRepository(dependency: MavenDependency): Repository {
+            if (dependency.groupId.endsWith("mojang")
+                || dependency.artifactId.endsWith("mojang")
+                || dependency.groupId.endsWith("lwjgl")
+                && dependency.artifactId != "lwjgl-platform"
+                ) return MOJANG
+            if (dependency.artifactId == "lwjgl-platform" && "nightly" in dependency.version) return MOJANG
+            if (dependency.groupId.endsWith("md-5")) return SPIGOT
+            if (dependency.groupId.endsWith("spigotmc")) return SPIGOT_SNAPSHOTS
+            if (dependency.groupId.endsWith("paulscode")) return VELOCITY
             return CENTRAL
         }
     }

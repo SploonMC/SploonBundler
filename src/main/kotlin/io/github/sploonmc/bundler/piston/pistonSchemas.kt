@@ -1,7 +1,7 @@
 package io.github.sploonmc.bundler.piston
 
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 
 @Serializable
 data class PistonVersion(
@@ -10,8 +10,21 @@ data class PistonVersion(
 )
 
 @Serializable
+data class PistonLibraryArtifact(
+    val url: String,
+    val path: String
+)
+
+@Serializable
+data class PistonLibraryDownloads(
+    val artifact: PistonLibraryArtifact? = null,
+    val classifiers: JsonObject? = null
+)
+
+@Serializable
 data class PistonLibrary(
     val name: String,
+    val downloads: PistonLibraryDownloads
 )
 
 @Serializable

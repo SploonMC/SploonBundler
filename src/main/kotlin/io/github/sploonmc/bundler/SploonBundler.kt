@@ -18,6 +18,7 @@ import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
 import java.util.jar.JarFile
 import kotlin.io.path.ExperimentalPathApi
+import kotlin.io.path.copyTo
 import kotlin.io.path.createDirectories
 import kotlin.io.path.createDirectory
 import kotlin.io.path.exists
@@ -98,16 +99,22 @@ class SploonBundler(val minecraftVersion: String, workDir: Path, val serverArgs:
         val deps = MavenDependency.parseLines(libs.lines())
         val spigotJarPath = setupVanilla()
         deps.forEach { dep ->
-            dep.download(false)
+            dep.rewrite().download(false)
         }
 
         // Handle mojang deps to cover everything
-        versionMeta.libraries.map(PistonLibrary::name).forEach { lib ->
-            MavenDependency
-                .parseLine(lib)
-                .download(false)
-                .map(Path::toUri)
-                .map(URI::toURL)
+        versionMeta.libraries.forEach { lib ->
+            if (lib.downloads.artifact != null) {
+                downloadUri(URI(lib.downloads.artifact.url), librariesDir.resolve(lib.downloads.artifact.path))
+            } else if (lib.downloads.classifiers != null) {
+                // we assume this is a native library only required for the client
+            } else {
+                MavenDependency
+                    .parseLine(lib.name)
+                    .rewrite()
+                    .also(::println)
+                    .download(false)
+            }
         }
 
         val classpath = buildList {
@@ -147,13 +154,12 @@ class SploonBundler(val minecraftVersion: String, workDir: Path, val serverArgs:
         }
 
         if (vanillaServer.notExists()) {
-            JarFile(vanillaBundler.toFile()).use { zip ->
-                val entry = zip.getEntry("META-INF/versions/$minecraftVersion/server-$minecraftVersion.jar")
-                zip.getInputStream(entry).use { input ->
-                    vanillaServer.outputStream().use { output ->
-                        input.transferTo(output)
-                    }
-                }
+            val needsExtraction = JarFile(vanillaBundler.toFile()).use(JarFile::needsExtraction)
+
+            if (!needsExtraction) {
+                vanillaBundler.copyTo(vanillaServer)
+            } else {
+                extractServer(vanillaBundler, bundlerDir.resolve("$minecraftVersion-extracted"), vanillaServer)
             }
         }
 
@@ -181,7 +187,7 @@ class SploonBundler(val minecraftVersion: String, workDir: Path, val serverArgs:
             private set
 
         val TRANSFORMERS = mapOf<String, (ClassVisitor) -> ClassVisitor>(
-            DedicatedServerTransformer.TARGET to { visitor -> DedicatedServerTransformer(visitor) }
+            DedicatedServerTransformer.TARGET to ::DedicatedServerTransformer
         )
     }
 }
