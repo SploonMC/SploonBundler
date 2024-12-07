@@ -16,6 +16,8 @@ import java.nio.file.FileVisitResult
 import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
+import java.time.Duration
+import java.time.Instant
 import java.util.jar.JarFile
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.copyTo
@@ -33,6 +35,7 @@ private const val SPLOON_PATCHES_REPO_BASE_URL = "https://raw.githubusercontent.
 class SploonBundler(val minecraftVersion: String, workDir: Path, val serverArgs: Array<String>) {
     private val pistonVersions = PistonAPI.getPistonVersions()
     private val versionMeta = pistonVersions.getVersionMeta(minecraftVersion)
+    val startTime = Instant.now()
 
     val bundlerDir = workDir.resolve("bundler")
 
@@ -141,6 +144,8 @@ class SploonBundler(val minecraftVersion: String, workDir: Path, val serverArgs:
         }, "Server thread")
 
         serverThread.contextClassLoader = classLoader
+        println("Took " + Duration.between(startTime, Instant.now()).toSeconds().toString() + " seconds")
+
         serverThread.start()
     }
 

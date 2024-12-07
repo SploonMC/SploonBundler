@@ -48,3 +48,7 @@ fun Path.sha1() = readBytes()
     .use {
         MessageDigest.getInstance("SHA-1").digest(it.readBytes())
     }.joinToString("") { "%02x".format(it) }
+
+fun readResource(resourcePath: String): String? {
+    return object {}.javaClass.getResourceAsStream(resourcePath)?.bufferedReader()?.use { it.readText() }
+}
